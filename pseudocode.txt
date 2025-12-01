@@ -1,0 +1,18 @@
+Person talks to robot
+Code transforms speech to text
+Teacher's chatGPT transform the text into something more accurate given the context
+Teacher's chatGPT then answers the question
+Text is processed to give us appropriate facial features and movement
+Code transforms text to speech
+Robot talks and moves
+
+TODO:
+Find an appropriate voice for Panoramix (Morgan Freeman) and one for the LLM mode
+Create a LLM mode and a way to switch between modes (manual)
+When the user is silent wait for the user to ask the question
+Make sure Panoramix always gives the advice at the end of tghe conversation
+The bot/user (maybe) should have a way to finish conversations
+should the language be in PT or EN?
+Connect with the Robots movements and screen
+Somehow combine the LLMs response with movement and the screen
+
