@@ -7,12 +7,11 @@ Code transforms text to speech :DONE
 Robot talks and moves
 
 TODO:
-Find an appropriate voice for Panoramix (Morgan Freeman) and one for the LLM mode
+Find an appropriate voice for Asterix and one for the LLM mode (Default google tts)
 Create a LLM mode and a way to switch between modes (manual)
 When the user is silent wait for the user to ask the question
-Make sure Panoramix always gives the advice at the end of tghe conversation
 The bot/user (maybe) should have a way to finish conversations
-should the language be in PT or EN?
+should the language be in PT or EN? :our choice (keep it simple)
 Connect with the Robots movements and screen
 Somehow combine the LLMs response with movement and the screen
 
