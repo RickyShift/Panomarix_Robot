@@ -1,9 +1,9 @@
 Person talks to robot
-Code transforms speech to text
-Teacher's chatGPT transform the text into something more accurate given the context
-Teacher's chatGPT then answers the question
-Text is processed to give us appropriate facial features and movement
-Code transforms text to speech
+Code transforms speech to text :DONE
+LLM transform the text into something more accurate given the context :DONE
+LLM answers the question :DONE
+Text is processed to give us appropriate facial features and movement :DONE
+Code transforms text to speech :DONE
 Robot talks and moves
 
 TODO:
