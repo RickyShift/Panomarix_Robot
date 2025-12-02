@@ -1,12 +1,17 @@
+import re
 import os
 import time
 import sys
 from dotenv import load_dotenv
 from ElmoV2API import ElmoV2API
-from llm_client import PanoramixLLM
+from llm_client import AsterixLLM
 from audio_handler import AudioHandler
 
 load_dotenv()
+
+def clean_text_for_speech(text):
+    """Removes text within asterisks (actions) for speech generation."""
+    return re.sub(r'\*.*?\*', '', text).strip()
 
 def main():
     # Configuration
@@ -24,19 +29,19 @@ def main():
     # Initialize components
     try:
         robot = ElmoV2API(robot_ip)
-        llm = PanoramixLLM()
+        llm = AsterixLLM()
         audio = AudioHandler(robot_ip)
         
         # Verify connection
         status = robot.status()
         print(f"Robot Status: {status}")
-        robot.set_screen(text="Panoramix Online")
+        robot.set_screen(text="Asterix Online")
         
     except Exception as e:
         print(f"Initialization failed: {e}")
         return
 
-    print("Panoramix Chatbot Started. Press Ctrl+C to exit.")
+    print("Asterix Chatbot Started. Press Ctrl+C to exit.")
     
     while True:
         try:
@@ -68,13 +73,14 @@ def main():
             robot.set_screen(text=f"You: {user_text[:20]}...") # Show partial text
             
             # 4. Get LLM Response
-            print("Consulting the spirits (LLM)...")
+            print("Consulting the warrior (LLM)...")
             response_text = llm.get_response(user_text)
-            print(f"Panoramix: {response_text}")
+            print(f"Asterix: {response_text}")
             
             # 5. Generate Audio Response
             print("Generating voice...")
-            if audio.generate_audio(response_text):
+            speech_text = clean_text_for_speech(response_text)
+            if audio.generate_audio(speech_text):
                 # 6. Upload Audio
                 print("Uploading response...")
                 response_filename = "panoramix_response.mp3"

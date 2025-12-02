@@ -2,7 +2,8 @@ import os
 import time
 import paramiko
 import speech_recognition as sr
-from gtts import gTTS
+import edge_tts
+import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -88,10 +89,14 @@ class AudioHandler:
             print(f"Error transcribing: {e}")
             return None
 
+    async def _generate_voice_async(self, text):
+        voice = "en-IE-ConnorNeural"
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(self.local_response_path)
+
     def generate_audio(self, text):
         try:
-            tts = gTTS(text=text, lang='en', slow=False)
-            tts.save(self.local_response_path)
+            asyncio.run(self._generate_voice_async(text))
             return True
         except Exception as e:
             print(f"Error generating audio: {e}")
@@ -100,4 +105,4 @@ class AudioHandler:
 if __name__ == "__main__":
     # Test
     handler = AudioHandler("192.168.1.100") # Mock IP
-    # handler.generate_audio("Hello, I am Panoramix.")
+    # handler.generate_audio("Hello, I am Asterix.")

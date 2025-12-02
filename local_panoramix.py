@@ -1,8 +1,10 @@
+import re
 import os
 import time
+import asyncio
 import speech_recognition as sr
-from gtts import gTTS
-from llm_client import PanoramixLLM
+import edge_tts
+from llm_client import AsterixLLM
 from dotenv import load_dotenv
 import tempfile
 
@@ -22,11 +24,21 @@ def play_audio(filename):
         # Mac/Linux
         os.system(f"open {filename}" if os.name == 'posix' else f"xdg-open {filename}")
 
+def clean_text_for_speech(text):
+    """Removes text within asterisks (actions) for speech generation."""
+    return re.sub(r'\*.*?\*', '', text).strip()
+
+async def generate_voice(text, filename):
+    """Generates voice using edge-tts."""
+    voice = "en-IE-ConnorNeural"
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(filename)
+
 def main():
-    print("Initializing Panoramix Local Chatbot...")
+    print("Initializing Asterix Local Chatbot...")
     
     try:
-        llm = PanoramixLLM()
+        llm = AsterixLLM()
     except Exception as e:
         print(f"Error initializing LLM: {e}")
         print("Make sure you have a .env file with GEMINI_API_KEY.")
@@ -35,7 +47,7 @@ def main():
     recognizer = sr.Recognizer()
     mic = sr.Microphone()
 
-    print("\n--- Panoramix is listening! (Press Ctrl+C to stop) ---\n")
+    print("\n--- Asterix is listening! (Press Ctrl+C to stop) ---\n")
 
     while True:
         try:
@@ -55,18 +67,18 @@ def main():
                 print(f"Could not request results; {e}")
                 continue
 
-            print("Consulting the spirits...")
+            print("Consulting the warrior...")
             response_text = llm.get_response(user_text)
-            print(f"Panoramix: {response_text}")
+            print(f"Asterix: {response_text}")
 
             print("Generating voice...")
-            tts = gTTS(text=response_text, lang='en', slow=False)
+            speech_text = clean_text_for_speech(response_text)
             
             # Save to a temporary file to avoid permission issues or conflicts
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 temp_filename = fp.name
             
-            tts.save(temp_filename)
+            asyncio.run(generate_voice(speech_text, temp_filename))
             
             print("Playing response...")
             play_audio(temp_filename)
