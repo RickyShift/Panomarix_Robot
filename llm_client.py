@@ -48,11 +48,13 @@ class AsterixLLM:
         - Mention Obelix or the village if relevant.
         """
         
-        # Upload the PDF book
-        pdf_path = r"C:\Users\shueb\OneDrive\Documentos\GitHub\Panomarix_Robot\The Twelve Tasks of Asterix - PDF Room.pdf"
-        print(f"Uploading context: {pdf_path}...")
+        # Upload the Transcript
+        # Use relative path based on the script's location
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        transcript_path = os.path.join(current_dir, "The Twelve Tasks of Asterix - Transcipt.txt")
+        print(f"Uploading context: {transcript_path}...")
         try:
-            self.book_file = genai.upload_file(pdf_path, mime_type="application/pdf")
+            self.book_file = genai.upload_file(transcript_path, mime_type="text/plain")
             print(f"Uploaded file '{self.book_file.display_name}' as: {self.book_file.uri}")
             
             # Wait for processing
@@ -79,7 +81,7 @@ class AsterixLLM:
         if self.book_file:
             history.append({
                 "role": "user",
-                "parts": [self.book_file, "This is the book 'The Twelve Tasks of Asterix'. Use it as your memory of your adventures."]
+                "parts": [self.book_file, "This is the transcript of 'The Twelve Tasks of Asterix'. Use it as your memory of your adventures."]
             })
             history.append({
                 "role": "model",
