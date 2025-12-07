@@ -7,7 +7,8 @@ import os
 import speech_recognition as sr
 import edge_tts
 import pygame
-from llm_client import AsterixLLM
+from llm_client import characterLLM
+from prompts import Asterix_prompt_model, Book_Expert_prompt_model
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -65,7 +66,7 @@ def clean_text_for_speech(text):
 
 async def process_response(llm, user_text):
     """Streams response from LLM and queues sentences for audio generation."""
-    print("Asterix is thinking...")
+    print(f"{llm.prompt_model.name} is thinking...")
     
     # Start audio generation worker
     gen_task = asyncio.create_task(generate_audio_worker())
@@ -81,7 +82,7 @@ async def process_response(llm, user_text):
             for sentence in sentences[:-1]:
                 clean_sentence = clean_text_for_speech(sentence)
                 if clean_sentence:
-                    print(f"Asterix (speaking): {clean_sentence}")
+                    print(f"{llm.prompt_model.name} (speaking): {clean_sentence}")
                     sentence_queue.put(clean_sentence)
             buffer = sentences[-1]
     
@@ -89,18 +90,27 @@ async def process_response(llm, user_text):
     if buffer:
         clean_sentence = clean_text_for_speech(buffer)
         if clean_sentence:
-            print(f"Asterix (speaking): {clean_sentence}")
+            print(f"{llm.prompt_model.name} (speaking): {clean_sentence}")
             sentence_queue.put(clean_sentence)
             
     # Signal end of generation
     sentence_queue.put(None)
     await gen_task
 
-def main():
-    print("Initializing Asterix Fluid Chatbot...")
+def main(persona="asterix"):
+    """
+    Main function to run the chatbot.
+    :param persona: "asterix" or "expert"
+    """
+    if persona == "expert":
+        prompt_model = Book_Expert_prompt_model
+    else:
+        prompt_model = Asterix_prompt_model
+
+    print(f"Initializing Fluid Chatbot as {prompt_model.name}...")
     
     try:
-        llm = AsterixLLM()
+        llm = characterLLM(prompt_model=prompt_model)
     except Exception as e:
         print(f"Error initializing LLM: {e}")
         return
@@ -112,7 +122,7 @@ def main():
     recognizer = sr.Recognizer()
     mic = sr.Microphone()
 
-    print("\n--- Asterix is listening! (Press Ctrl+C to stop) ---\n")
+    print(f"\n--- {prompt_model.name} is listening! (Press Ctrl+C to stop) ---\n")
 
     while True:
         try:
@@ -145,4 +155,9 @@ def main():
             print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    main()
+    # --- CHOOSE YOUR PERSONA ---
+    # To run as Asterix, use:
+    main(persona="asterix")
+
+    # To run as the Book Expert, use:
+    # main(persona="expert")

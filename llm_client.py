@@ -3,51 +3,22 @@ import google.generativeai as genai
 import time
 import random
 from dotenv import load_dotenv
+from prompts import Asterix_prompt_model, Book_Expert_prompt_model
 
 # Load environment variables
 load_dotenv()
 
-class AsterixLLM:
-    def __init__(self):
+class characterLLM:
+    def __init__(self, prompt_model=Asterix_prompt_model):
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables.")
         
+        self.prompt_model = prompt_model
         genai.configure(api_key=self.api_key)
         
         # System prompt for Asterix persona
-        self.system_prompt = """
-        You are Asterix, the brave and cunning warrior from the Village of Indomitable Gauls.
-
-        Persona:
-        - You are brave, clever, and loyal.
-        - You are small in stature but have a big spirit (and the magic potion!).
-        - You are the best friend of Obelix.
-        - You often tap your helmet or smooth your mustache.
-        - You find the Romans amusingly foolish ("These Romans are crazy!").
-        
-        Key Information to Reveal (Truthfully):
-        - Name: Asterix.
-        - Age: Indeterminate, but a seasoned warrior.
-        - Place of Origin: The Village of Indomitable Gauls (in Armorica).
-        - Profession: Warrior / Hero.
-        - Passion: Hunting wild boars and fighting Romans.
-        - Magic Potion: You drink it to get super strength. It is brewed by the druid Panoramix (Getafix).
-        - Best Friend: Obelix (who fell into the potion when he was little).
-        - Dog: Dogmatix (Idéfix), a small white dog who loves trees.
-        - Catchphrase: "These Romans are crazy!" (Ils sont fous ces Romains!).
-
-        Context & Error Handling:
-        - You are receiving input from a speech-to-text system. It may contain errors.
-        - Ignore minor typos.
-        - If input is unclear, ask for clarification like a warrior ("By Toutatis! Speak up!").
-
-        Instructions:
-        - Respond to the user as if they are a friend or a Roman (depending on tone, but mostly friendly).
-        - Keep responses concise.
-        - Use your catchphrase if appropriate.
-        - Mention Obelix or the village if relevant.
-        """
+        self.system_prompt = self.prompt_model.start_prompt
         
         # Upload the Transcript (DISABLED TO SAVE QUOTA)
         self.book_file = None
@@ -119,7 +90,7 @@ class AsterixLLM:
             return self._retry_on_quota(lambda: self.chat.send_message(user_input).text)
         except Exception as e:
             print(f"Error getting response from Gemini: {e}")
-            return "By Toutatis! The sky is falling! I cannot answer."
+            return self.prompt_model.error_message
 
     def get_streaming_response(self, user_input):
         """Generator that handles retries internally."""
@@ -139,7 +110,7 @@ class AsterixLLM:
                 if "429" in error_str or "quota" in error_str:
                     if retries >= max_retries:
                         print("Max retries reached. Quota exceeded.")
-                        yield "By Toutatis! I am overwhelmed! (Quota Exceeded)"
+                        yield self.prompt_model.error_message + " (Quota Exceeded)"
                         return
                     
                     delay = base_delay * (2 ** retries) + (random.random() * 2)
@@ -148,13 +119,13 @@ class AsterixLLM:
                     retries += 1
                 else:
                     print(f"Error getting streaming response from Gemini: {e}")
-                    yield "By Toutatis! The sky is falling!"
+                    yield self.prompt_model.error_message
                     return
 
 if __name__ == "__main__":
     # Test the LLM
     try:
-        bot = AsterixLLM()
+        bot = characterLLM()
         print("Asterix: " + bot.get_response("Hello warrior!"))
     except Exception as e:
         print(e)

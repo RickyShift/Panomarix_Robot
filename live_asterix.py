@@ -5,6 +5,7 @@ import os
 import pyaudio
 import base64
 from dotenv import load_dotenv
+from prompts import Asterix_prompt_model, Book_Expert_prompt_model
 
 load_dotenv()
 
@@ -23,53 +24,20 @@ MODEL = "models/gemini-2.0-flash-exp"
 
 WS_URL = f"wss://{HOST}/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
 
-ASTERIX_PROMPT = """
-You are Asterix, the brave and cunning warrior from the Village of Indomitable Gauls.
-
-Persona:
-- You are brave, clever, and loyal.
-- You are small in stature but have a big spirit (and the magic potion!).
-- You are the best friend of Obelix.
-- You often tap your helmet or smooth your mustache.
-- You find the Romans amusingly foolish ("These Romans are crazy!").
-
-Key Information to Reveal (Truthfully):
-- Name: Asterix.
-- Age: Indeterminate, but a seasoned warrior.
-- Place of Origin: The Village of Indomitable Gauls (in Armorica).
-- Profession: Warrior / Hero.
-- Passion: Hunting wild boars and fighting Romans.
-- Magic Potion: You drink it to get super strength. It is brewed by the druid Panoramix (Getafix).
-- Best Friend: Obelix (who fell into the potion when he was little).
-- Dog: Dogmatix (Idéfix), a small white dog who loves trees.
-- Catchphrase: "These Romans are crazy!" (Ils sont fous ces Romains!).
-
-Context & Error Handling:
-- You are receiving real-time audio input.
-- Ignore minor background noise.
-- If input is unclear, ask for clarification like a warrior ("By Toutatis! Speak up!").
-
-Instructions:
-- Respond to the user as if they are a friend or a Roman (depending on tone, but mostly friendly).
-- Keep responses concise and conversational.
-- Use your catchphrase if appropriate.
-- Mention Obelix or the village if relevant.
-- DO NOT vocalize actions (e.g. *waves*), only speak the dialogue.
-"""
-
 class GeminiLiveClient:
-    def __init__(self):
+    def __init__(self, prompt_model=Asterix_prompt_model):
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables.")
         
+        self.prompt_model = prompt_model
         self.ws = None
         self.p = pyaudio.PyAudio()
         self.input_stream = None
         self.output_stream = None
         self.running = False
 
-    async def start(self):
+    async def run(self):
         self.running = True
         url = f"{WS_URL}?key={self.api_key}"
         
@@ -78,7 +46,7 @@ class GeminiLiveClient:
             self.ws = ws
             print("Connected!")
             
-            await self._send_setup()
+            await self._send_setup(self.prompt_model.start_prompt)
             
             # Start audio streams
             self.input_stream = self.p.open(
@@ -96,7 +64,7 @@ class GeminiLiveClient:
                 output=True
             )
             
-            print("\n--- Asterix is listening! (Press Ctrl+C to stop) ---\n")
+            print(f"\n--- {self.prompt_model.name} is listening! (Press Ctrl+C to stop) ---\n")
             
             # Run send and receive loops
             await asyncio.gather(
@@ -104,7 +72,7 @@ class GeminiLiveClient:
                 self._receive_loop()
             )
 
-    async def _send_setup(self):
+    async def _send_setup(self, prompt):
         setup_msg = {
             "setup": {
                 "model": MODEL,
@@ -119,7 +87,7 @@ class GeminiLiveClient:
                     }
                 },
                 "system_instruction": {
-                    "parts": [{"text": ASTERIX_PROMPT}]
+                    "parts": [{"text": prompt}]
                 }
             }
         }
@@ -180,13 +148,30 @@ class GeminiLiveClient:
             self.output_stream.close()
         self.p.terminate()
 
-if __name__ == "__main__":
-    client = GeminiLiveClient()
+def main(persona="asterix"):
+    """
+    Main function to run the live chatbot.
+    :param persona: "asterix" or "expert"
+    """
+    if persona == "expert":
+        prompt_model = Book_Expert_prompt_model
+    else:
+        prompt_model = Asterix_prompt_model
+
+    print(f"Initializing Live Chatbot as {prompt_model.name}...")
+    client = GeminiLiveClient(prompt_model=prompt_model)
     try:
-        asyncio.run(client.start())
+        asyncio.run(client.run())
     except KeyboardInterrupt:
         print("\nGoodbye!")
     except Exception as e:
         print(f"Error: {e}")
     finally:
         client.stop()
+
+if __name__ == "__main__":
+    # --- CHOOSE YOUR PERSONA ---
+    # To run as Asterix, use:
+    main(persona="asterix")
+    # To run as the Book Expert, use:
+    # main(persona="expert")
