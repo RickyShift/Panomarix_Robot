@@ -32,9 +32,42 @@ def clean_text_for_speech(text):
 
 async def generate_and_play_audio_worker(elmo: ElmoV2API):
     """Worker to generate audio from sentences and play them via the robot's API."""
-    # This worker will now also handle playing the audio.
-    # It replaces the 'play_audio_worker' from the original script.
-    pass # TODO: Implement this worker
+    while True:
+        sentence = sentence_queue.get()
+        if sentence is None:  # End signal
+            break
+        
+        try:
+            # Generate speech with edge-tts
+            communicate = edge_tts.Communicate(sentence, VOICE)
+            audio_file = "temp_speech.mp3"
+            await communicate.save(audio_file)
+            
+            # Play audio via robot API
+            with open(audio_file, 'rb') as f:
+                elmo.play_audio(f)
+            
+            os.remove(audio_file)
+        except Exception as e:
+            print(f"Error generating/playing audio: {e}")
+
+def listen_for_speech(recognizer, timeout=10):
+    """Listens for speech input from the robot's microphone."""
+    try:
+        with sr.Microphone() as source:
+            print("Listening...")
+            audio = recognizer.listen(source, timeout=timeout)
+        
+        # Transcribe using Google Speech Recognition
+        text = recognizer.recognize_google(audio)
+        print(f"You: {text}")
+        return text
+    except sr.UnknownValueError:
+        print("Sorry, I didn't catch that. Please try again.")
+        return None
+    except sr.RequestError as e:
+        print(f"Speech recognition error: {e}")
+        return None
 
 async def process_response(llm, user_text, elmo: ElmoV2API):
     """Streams response from LLM and queues sentences for audio generation."""
@@ -94,14 +127,8 @@ def main(persona="asterix"):
 
     while True:
         try:
-            # TODO: Replace this with Elmo's recording API
-            # 1. Start recording
-            # 2. Wait for speech
-            # 3. Stop recording
-            # 4. Transcribe the saved file
-            
-            # Placeholder for user input for now
-            user_text = input("You: ")
+            # Replace the placeholder with actual speech recognition
+            user_text = listen_for_speech(recognizer)
             if not user_text:
                 continue
 
