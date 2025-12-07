@@ -3,7 +3,7 @@ import google.generativeai as genai
 import time
 import random
 from dotenv import load_dotenv
-from prompts import Asterix_prompt_model, Book_Expert_prompt_model
+from LLM_character_prompts import Asterix_prompt_model, Book_Expert_prompt_model
 
 # Load environment variables
 load_dotenv()

@@ -8,7 +8,7 @@ import speech_recognition as sr
 import edge_tts
 import pygame
 from llm_client import characterLLM
-from prompts import Asterix_prompt_model, Book_Expert_prompt_model
+from LLM_character_prompts import Asterix_prompt_model, Book_Expert_prompt_model
 from dotenv import load_dotenv
 
 load_dotenv()
