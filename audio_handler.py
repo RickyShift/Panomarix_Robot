@@ -21,7 +21,7 @@ class AudioHandler:
         self.local_response_path = "temp_response.mp3" # gTTS saves as mp3
         
         # Robot paths (Assumed based on research)
-        self.robot_recording_path = "/home/idmind/elmo-v2/recordings/audio.wav" # Needs verification
+        self.robot_recording_path = "/home/idmind/elmo-v2/src/static/sounds/mic.wav" # Verified candidates: mic.wav or speech.wav
         self.robot_sounds_path = "/home/idmind/elmo-v2/src/static/sounds/"
 
     def connect_ssh(self):
@@ -54,13 +54,15 @@ class AudioHandler:
             self.ssh.close()
             return False
 
-    def upload_response(self, filename="response.mp3"):
+    def upload_response(self, filename="response.mp3", local_file=None):
         if not self.connect_ssh():
             return False
         
         try:
             sftp = self.ssh.open_sftp()
-            local_file = self.local_response_path
+            if local_file is None:
+                local_file = self.local_response_path
+            
             remote_file = os.path.join(self.robot_sounds_path, filename)
             sftp.put(local_file, remote_file)
             sftp.close()
@@ -68,6 +70,27 @@ class AudioHandler:
             return True
         except Exception as e:
             print(f"Failed to upload response: {e}")
+            self.ssh.close()
+            return False
+
+    def convert_mp3_to_wav(self, filename_mp3, filename_wav):
+        """Converts mp3 to wav on the robot using mpg123"""
+        if not self.connect_ssh():
+            return False
+        try:
+            # mpg123 -w output.wav input.mp3
+            # Full paths
+            remote_mp3 = os.path.join(self.robot_sounds_path, filename_mp3)
+            remote_wav = os.path.join(self.robot_sounds_path, filename_wav)
+            
+            command = f"mpg123 -w {remote_wav} {remote_mp3}"
+            stdin, stdout, stderr = self.ssh.exec_command(command)
+            exit_status = stdout.channel.recv_exit_status()
+            
+            self.ssh.close()
+            return exit_status == 0
+        except Exception as e:
+            print(f"Failed to convert audio: {e}")
             self.ssh.close()
             return False
 
