@@ -74,38 +74,41 @@ class FluidElmoHandler:
 
             try:
                 # 1. Generate Audio locally
-                # Local WAV Generation using pyttsx3 (Offline & WAV native)
-                import pyttsx3
+                # Switching to gTTS with UK accent for better Asterix persona
+                from gtts import gTTS
                 
-                # Note: pyttsx3 engine should be initialized once if possible, but here for thread safety in async we do it carefully.
-                # Ideally, engine setup should be in __init__, but save_to_file requires running loop which blocks.
-                # We will run it in a thread.
-                
-                def generate_wav(text, filename):
-                    engine = pyttsx3.init()
-                    engine.save_to_file(text, filename)
-                    engine.runAndWait()
-                
-                filename = f"response_{int(time.time()*1000)}.wav"
+                filename = f"response_{int(time.time()*1000)}.mp3"
                 local_path = filename
                 
-                logging.info(f"Generating WAV locally for: {text[:20]}...")
-                await asyncio.to_thread(generate_wav, text, local_path)
+                logging.info(f"Generating Audio (gTTS Irish) locally for: {text[:20]}...")
+                # tld='ie' gives an Irish accent (Celtic-ish)
+                # Note: This is usually female, but EdgeTTS (Male) is blocked.
+                tts = gTTS(text, lang='en', tld='ie')
+                await asyncio.to_thread(tts.save, local_path)
                 
                 # 2. Upload to Robot
                 logging.info(f"Uploading {filename} to robot...")
                 if self.audio_handler.upload_response(filename=filename, local_file=local_path):
                     
-                    # 3. Calculate Duration
-                    duration = self.calculate_audio_duration(local_path)
+                    # 3. Convert to WAV on Robot (Since play_sound needs WAV)
+                    filename_wav = filename.replace(".mp3", ".wav")
+                    logging.info(f"Converting to WAV on robot...")
+                    if self.audio_handler.convert_mp3_to_wav(filename, filename_wav):
                     
-                    # 4. Play on Robot
-                    self.elmo.set_volume(50) # User requested 50%
-                    logging.info(f"Playing {filename} on robot ({duration:.2f}s)...")
-                    self.elmo.play_sound(filename)
-                                        
-                    # 5. Wait for playback to finish
-                    await asyncio.sleep(duration + 0.2)
+                        # 4. Calculate Duration
+                        # Duration calculation might be tricky for MP3 if pygame mixer expects WAV?
+                        # But pygame supports MP3 commonly.
+                        duration = self.calculate_audio_duration(local_path)
+                        
+                        # 5. Play on Robot
+                        self.elmo.set_volume(60) # User requested +10% (so 60%)
+                        logging.info(f"Playing {filename_wav} on robot ({duration:.2f}s)...")
+                        self.elmo.play_sound(filename_wav)
+                                            
+                        # 6. Wait for playback to finish
+                        await asyncio.sleep(duration + 0.2)
+                    else:
+                        logging.error("Failed to convert audio dict on robot.")
                 else:
                     logging.error("Failed to upload audio file.")
                 

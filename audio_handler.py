@@ -83,7 +83,12 @@ class AudioHandler:
             remote_mp3 = os.path.join(self.robot_sounds_path, filename_mp3)
             remote_wav = os.path.join(self.robot_sounds_path, filename_wav)
             
-            command = f"mpg123 -w {remote_wav} {remote_mp3}"
+            # ffmpeg -i input.mp3 -af "asetrate=24000*0.9,aresample=24000" output.wav
+            remote_mp3 = os.path.join(self.robot_sounds_path, filename_mp3)
+            remote_wav = os.path.join(self.robot_sounds_path, filename_wav)
+            
+            # Using 24000Hz as base for gTTS. 0.85 factor lowers pitch and speed.
+            command = f"/usr/bin/ffmpeg -y -i {remote_mp3} -af \"asetrate=24000*0.85,aresample=24000\" {remote_wav}"
             stdin, stdout, stderr = self.ssh.exec_command(command)
             exit_status = stdout.channel.recv_exit_status()
             
