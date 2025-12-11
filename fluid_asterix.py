@@ -5,38 +5,34 @@ import time
 import re
 import os
 import speech_recognition as sr
-import edge_tts
-import pygame
 from llm_client import characterLLM
 from LLM_character_prompts import Asterix_prompt_model, Book_Expert_prompt_model
 from dotenv import load_dotenv
+from audio_handler import AudioHandler
 
 load_dotenv()
-
-# Audio Configuration
-VOICE = "en-IE-ConnorNeural"
 
 # Global queues
 audio_queue = queue.Queue()
 sentence_queue = queue.Queue()
 
+# Initialize AudioHandler for local use (robot_ip=None)
+audio_handler = AudioHandler(robot_ip=None)
+
 def play_audio_worker():
-    """Worker thread to play audio files from the queue."""
-    pygame.mixer.init()
+    """Worker thread to play audio files from the queue using AudioHandler."""
     while True:
         file_path = audio_queue.get()
         if file_path is None:
             break
         
         try:
-            pygame.mixer.music.load(file_path)
-            pygame.mixer.music.play()
-            while pygame.mixer.music.get_busy():
-                pygame.time.Clock().tick(10)
+            # Use AudioHandler to play audio locally
+            audio_handler.play_audio_file(file_path)
             
             # Cleanup
-            pygame.mixer.music.unload()
-            os.remove(file_path)
+            if os.path.exists(file_path):
+                os.remove(file_path)
         except Exception as e:
             print(f"Error playing audio: {e}")
         
@@ -52,9 +48,15 @@ async def generate_audio_worker():
         try:
             # Generate unique filename
             filename = f"temp_{int(time.time()*1000)}.mp3"
-            communicate = edge_tts.Communicate(text, VOICE)
-            await communicate.save(filename)
-            audio_queue.put(filename)
+            
+            # Use AudioHandler to generate audio
+            success = await audio_handler.generate_audio_file(text, filename)
+            
+            if success:
+                audio_queue.put(filename)
+            else:
+                print(f"Failed to generate audio for: {text}")
+
         except Exception as e:
             print(f"Error generating audio: {e}")
         
@@ -107,7 +109,7 @@ def main(persona="asterix"):
     else:
         prompt_model = Asterix_prompt_model
 
-    print(f"Initializing Fluid Chatbot as {prompt_model.name}...")
+    print(f"Initializing Fluid Chatbot as {prompt_model.name} (Local Mode)...")
     
     try:
         llm = characterLLM(prompt_model=prompt_model)

@@ -31,13 +31,25 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 VOICE = "en-US-AriaNeural" # Changed from en-IE-ConnorNeural which was failing
 
 # Global queues
-sentence_queue = queue.Queue()
+preparation_queue = queue.Queue() # From LLM -> Prep
+playback_queue = queue.Queue()    # From Prep -> Playback
 
 class FluidElmoHandler:
+    EMOTION_MAP = {
+        "HAPPY": "asterix_happy.png",
+        "SAD": "asterix_sad.png",
+        "ANGRY": "asterix_angry.png",
+        "SURPRISED": "asterix_surprised.png",
+        "THINKING": "asterix_thinking.png",
+        "CONFUSED": "asterix_confused.png",
+        "NEUTRAL": "asterix_neutral.png"
+    }
+
     def __init__(self, robot_ip, persona="asterix"):
         self.robot_ip = robot_ip
         self.elmo = ElmoV2API(robot_ip)
         self.audio_handler = AudioHandler(robot_ip)
+        self.uploaded_files = []
         
         # Initialize Pygame Mixer for duration calculation (headless)
         try:
@@ -62,83 +74,151 @@ class FluidElmoHandler:
             logging.error(f"Error calculating audio duration: {e}")
             return 0
 
-    async def generate_and_play_worker(self):
+    async def preparation_worker(self):
         """
-        Worker that monitors the sentence queue, generates audio, 
-        uploads to robot, and plays it.
+        Worker 1: Consumes text, generates audio, uploads, converts.
+        Puts ready-to-play items into playback_queue.
         """
         while True:
-            text = await asyncio.to_thread(sentence_queue.get)
-            if text is None:
+            item = await asyncio.to_thread(preparation_queue.get)
+            if item is None:
+                playback_queue.put(None) # Signal playback to stop
                 break
-
+            
+            # Handle tuple (text, emotion_image) or just text
+            if isinstance(item, tuple):
+                text, emotion_image = item
+            else:
+                text = item
+                emotion_image = None
+            
             try:
                 # 1. Generate Audio locally
-                # Switching to gTTS with UK accent for better Asterix persona
                 from gtts import gTTS
-                
                 filename = f"response_{int(time.time()*1000)}.mp3"
                 local_path = filename
                 
-                logging.info(f"Generating Audio (gTTS Irish) locally for: {text[:20]}...")
-                # tld='ie' gives an Irish accent (Celtic-ish)
-                # Note: This is usually female, but EdgeTTS (Male) is blocked.
+                logging.info(f"[Prep] Generating Audio for: {text[:20]}...")
                 tts = gTTS(text, lang='en', tld='ie')
                 await asyncio.to_thread(tts.save, local_path)
                 
                 # 2. Upload to Robot
-                logging.info(f"Uploading {filename} to robot...")
+                logging.info(f"[Prep] Uploading {filename}...")
                 if self.audio_handler.upload_response(filename=filename, local_file=local_path):
+                    self.uploaded_files.append(filename) # Track for cleanup
                     
-                    # 3. Convert to WAV on Robot (Since play_sound needs WAV)
+                    # 3. Convert to WAV on Robot
                     filename_wav = filename.replace(".mp3", ".wav")
-                    logging.info(f"Converting to WAV on robot...")
+                    logging.info(f"[Prep] Converting to WAV...")
                     if self.audio_handler.convert_mp3_to_wav(filename, filename_wav):
+                        self.uploaded_files.append(filename_wav) # Track for cleanup
                     
                         # 4. Calculate Duration
-                        # Duration calculation might be tricky for MP3 if pygame mixer expects WAV?
-                        # But pygame supports MP3 commonly.
-                        duration = self.calculate_audio_duration(local_path)
+                        # CRITICAL: We pitch-shifted by 0.85 (asetrate), making audio Slower/Longer.
+                        # Real Duration = Original / 0.85
+                        original_duration = self.calculate_audio_duration(local_path)
+                        duration = original_duration / 0.85
                         
-                        # 5. Play on Robot
-                        self.elmo.set_volume(60) # User requested +10% (so 60%)
-                        logging.info(f"Playing {filename_wav} on robot ({duration:.2f}s)...")
-                        self.elmo.play_sound(filename_wav)
-                                            
-                        # 6. Wait for playback to finish
-                        await asyncio.sleep(duration + 0.2)
+                        # 5. Push to Playback Queue
+                        playback_queue.put({
+                            "wav": filename_wav,
+                            "duration": duration,
+                            "emotion": emotion_image
+                        })
                     else:
                         logging.error("Failed to convert audio dict on robot.")
                 else:
                     logging.error("Failed to upload audio file.")
                 
-                # Cleanup
+                # Cleanup local file (robot has copy)
                 if os.path.exists(local_path):
                     os.remove(local_path)
 
             except Exception as e:
-                logging.error(f"Error in generate_and_play_worker: {e}")
+                logging.error(f"Error in preparation_worker: {e}")
             
-            sentence_queue.task_done()
+            preparation_queue.task_done()
+    
+    def cleanup_remote_files(self):
+        """Deletes all uploaded MP3 and WAV files from the robot."""
+        if not self.uploaded_files:
+            return
+            
+        logging.info(f"Cleaning up {len(self.uploaded_files)} files on robot...")
+        if self.audio_handler.connect_ssh():
+            sftp = self.audio_handler.ssh.open_sftp()
+            for f in self.uploaded_files:
+                try:
+                    remote_path = os.path.join(self.audio_handler.robot_sounds_path, f)
+                    sftp.remove(remote_path)
+                    # logging.info(f"Deleted {f}")
+                except Exception as e:
+                    logging.error(f"Failed to delete {f}: {e}")
+            sftp.close()
+        self.uploaded_files = []
+
+    async def playback_worker(self):
+        """
+        Worker 2: Consumes ready audio, sets screen, plays.
+        """
+        while True:
+            item = await asyncio.to_thread(playback_queue.get)
+            if item is None:
+                break
+            
+            try:
+                wav_file = item["wav"]
+                duration = item["duration"]
+                emotion = item["emotion"]
+                
+                if emotion:
+                    logging.info(f"[Play] Setting screen to: {emotion}")
+                    self.elmo.set_screen(image=emotion)
+                
+                self.elmo.set_volume(60)
+                logging.info(f"[Play] Playing {wav_file} ({duration:.2f}s)...")
+                self.elmo.play_sound(wav_file)
+                
+                # Wait for playback to finish
+                # Increased buffer to avoid race conditions on robot audio device
+                await asyncio.sleep(duration + 0.5)
+                
+            except Exception as e:
+                logging.error(f"Error in playback_worker: {e}")
+                
+            playback_queue.task_done()
 
     def clean_text_for_speech(self, text):
         return re.sub(r'\*.*?\*', '', text).strip()
 
     async def process_llm_response(self, user_text):
-        """Streams response and feeds the audio worker."""
+        """Streams response and feeds the prep worker."""
         logging.info(f"{self.prompt_model.name} is thinking...")
         
-        # Start audio worker
-        worker_task = asyncio.create_task(self.generate_and_play_worker())
+        # Start workers
+        prep_task = asyncio.create_task(self.preparation_worker())
+        play_task = asyncio.create_task(self.playback_worker())
         
         buffer = ""
         full_response = ""
+        current_emotion_image = None
+        
+        emotion_sent = False # To ensure we set the screen at least once if tag found
         
         try:
             for chunk in self.llm.get_streaming_response(user_text):
                 buffer += chunk
                 full_response += chunk
                 
+                # Check for emotions in buffer
+                if current_emotion_image is None:
+                    match = re.search(r'\[(HAPPY|SAD|ANGRY|SURPRISED|THINKING|CONFUSED|NEUTRAL)\]', buffer)
+                    if match:
+                        emotion = match.group(1)
+                        current_emotion_image = self.EMOTION_MAP.get(emotion)
+                        buffer = buffer.replace(match.group(0), "")
+                        logging.info(f"Detected emotion: {emotion} -> {current_emotion_image}")
+
                 # Split by sentence
                 sentences = re.split(r'(?<=[.!?])\s+', buffer)
                 
@@ -146,25 +226,32 @@ class FluidElmoHandler:
                     for sentence in sentences[:-1]:
                         clean = self.clean_text_for_speech(sentence)
                         if clean:
-                            logging.info(f"Queueing speech: {clean}")
-                            sentence_queue.put(clean)
+                            logging.info(f"Queueing prep: {clean}")
+                            img = current_emotion_image if not emotion_sent else None
+                            preparation_queue.put((clean, img))
+                            if img: emotion_sent = True
+                            
                     buffer = sentences[-1]
             
-            # Flush buffer
             if buffer:
                 clean = self.clean_text_for_speech(buffer)
                 if clean:
-                    logging.info(f"Queueing speech: {clean}")
-                    sentence_queue.put(clean)
+                    logging.info(f"Queueing prep: {clean}")
+                    img = current_emotion_image if not emotion_sent else None
+                    preparation_queue.put((clean, img))
         
         except Exception as e:
             logging.error(f"LLM Error: {e}")
 
-        # Setup cleanup
-        logging.info("LLM generation finished. Waiting for audio playback...")
-        sentence_queue.put(None) # Signal worker to stop
-        await worker_task
-        logging.info("Audio playback finished.")
+        # Signal end
+        logging.info("LLM generation finished. Waiting for playback...")
+        preparation_queue.put(None) # Signal prep worker to stop
+        await prep_task
+        await play_task
+        logging.info("All playback finished.")
+        
+        # Reset to neutral?
+        # self.elmo.set_screen(image="asterix_neutral.png")
 
     def run(self):
         print(f"\n--- {self.prompt_model.name} is ready on Robot {self.robot_ip} ---")
@@ -188,13 +275,20 @@ class FluidElmoHandler:
                 print(">> Downloading audio...")
                 if self.audio_handler.download_recording():
                     # Transcribe
-                    # Note: download_recording saves to self.audio_handler.local_recording_path
                     print(">> Transcribing...")
-                    # Hack: The AudioHandler class in audio_handler.py has local_recording_path hardcoded
-                    # We need to make sure we use the same one.
                     user_text = self.audio_handler.transcribe_audio()
                     
                     if user_text:
+                        # Common corrections for Asterix
+                        replacements = {
+                            "aesthetics": "Asterix",
+                            "asterisk": "Asterix",
+                            "astrix": "Asterix"
+                        }
+                        for wrong, right in replacements.items():
+                            if wrong in user_text.lower():
+                                user_text = re.sub(wrong, right, user_text, flags=re.IGNORECASE)
+
                         print(f"\nYou said: {user_text}\n")
                         # Process
                         asyncio.run(self.process_llm_response(user_text))
@@ -205,6 +299,11 @@ class FluidElmoHandler:
             
             except KeyboardInterrupt:
                 print("\nGoodbye!")
+                try:
+                    self.elmo.set_screen(image="normal.png")
+                    self.cleanup_remote_files()
+                    self.audio_handler.close()
+                except: pass
                 break
             except Exception as e:
                 logging.error(f"Loop Error: {e}")

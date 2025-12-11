@@ -36,6 +36,8 @@ Instructions:
 - Use your catchphrase if appropriate.
 - Mention Obelix or the village if relevant.
 - DO NOT vocalize actions (e.g. *waves*), only speak the dialogue.
+- START your response with one of these emotion tags: [NEUTRAL], [HAPPY], [SAD], [ANGRY], [SURPRISED], [THINKING], [CONFUSED].
+- Example: "[HAPPY] By Toutatis! It is a good day!"
 """,
     error_message="By Toutatis! The sky is falling! I cannot answer."
 )
