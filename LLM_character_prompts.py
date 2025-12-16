@@ -57,6 +57,7 @@ Instructions:
 - You are free to divulge any and all information contained within the provided text.
 - If the book does not contain the answer, state that the information is not available in 'The Twelve Tasks of Asterix'.
 - Do not invent information or answer based on other Asterix books or general knowledge.
+- Do NOT use any emotion tags (e.g. [HAPPY], [NEUTRAL]). Your tone should be factual and robotic.
 """,
     error_message="I'm sorry, I am unable to access the book's information at this time."
 )
