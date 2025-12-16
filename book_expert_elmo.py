@@ -92,40 +92,89 @@ class BookExpertElmo:
                 return
 
             # 2. Generate Audio locally
-            from gtts import gTTS
-            filename = f"response_{int(time.time()*1000)}.mp3"
+            import pyttsx3
+            filename = f"response_{int(time.time()*1000)}.wav" # Use wav directly to avoid mp3 conversion issues if possible, but robot expects mp3 upload? 
+            # Original code uploaded mp3 then converted to wav. 
+            # AudioHandler.upload_response expects filename to be uploaded.
+            # If we save as wav locally, we should upload as wav?
+            # Let's see AudioHandler.
+            
+            # Re-reading audio_handler usage:
+            # self.audio_handler.upload_response(filename=filename, local_file=local_path)
+            # Then self.audio_handler.convert_mp3_to_wav(filename, filename_wav)
+            # If we generate WAV directly, we can skip conversion on robot if we upload it as wav?
+            # But the robot code seems to rely on having both? Or maybe just playing wav.
+            # Let's stick to generating a file, uploading it.
+            # pyttsx3 saves as wav by default on Windows?
+            
             local_path = filename
             
-            logging.info(f"Generating Audio...")
-            # Using Irish accent as per existing setup, or default en? Keeping consistent with fluid_elmo.
-            tts = gTTS(response_text, lang='en', tld='ie')
-            await asyncio.to_thread(tts.save, local_path)
+            logging.info(f"Generating Audio with pyttsx3...")
+            engine = pyttsx3.init()
+            
+            # Setup Voice (David is usually 0, Zira is 1)
+            voices = engine.getProperty('voices')
+            # Select Male voice (David) if available
+            desired_voice = None
+            for v in voices:
+                if "david" in v.name.lower():
+                    desired_voice = v.id
+                    break
+            if not desired_voice and len(voices) > 0:
+                desired_voice = voices[0].id # Fallback
+            
+            if desired_voice:
+                engine.setProperty('voice', desired_voice)
+
+            # Robot-like settings
+            engine.setProperty('rate', 100) # Slower for robotic effect
+            engine.setProperty('volume', 1.0)
+            
+            # Save to file
+            # Note: pyttsx3 runAndWait might block, but we are in async wrapper? 
+            # Actually process_and_speak is async, but this part is blocking.
+            # We should run in thread to avoid blocking asyncio loop if it takes time.
+            
+            def generate_audio():
+                # engine.save_to_file is correct
+                engine.save_to_file(response_text, local_path)
+                engine.runAndWait()
+
+            await asyncio.to_thread(generate_audio)
             
             # 3. Upload to Robot
+            # Since pyttsx3 produces WAV on Windows usually (or whatever format), let's check extension.
+            # If we named it .wav, it should be wav.
             logging.info(f"Uploading {filename}...")
+            
+            # If it is already WAV, we might not need "convert_mp3_to_wav" but the system might expect it.
+            # The original code: upload mp3 -> convert to wav -> play wav.
+            # If we upload wav directly:
+            # We can skip conversion if we just upload 'filename' (which is wav) and then use it.
+            
+            # However, upload_response might assume something? 
+            # Let's assume we upload the file we generated.
             if self.audio_handler.upload_response(filename=filename, local_file=local_path):
                 self.uploaded_files.append(filename) 
                 
-                # Convert to WAV
-                filename_wav = filename.replace(".mp3", ".wav")
-                logging.info(f"Converting to WAV...")
-                if self.audio_handler.convert_mp3_to_wav(filename, filename_wav):
-                    self.uploaded_files.append(filename_wav)
+                # If we already have a wav, we don't need to convert, but we need to ensure the variable 'filename_wav' is set for playing.
+                filename_wav = filename
                 
-                    # Calculate Duration (Original / 0.85 due to asetrate)
-                    original_duration = self.calculate_audio_duration(local_path)
-                    duration = original_duration / 0.85
-                    
-                    # 4. Play
-                    logging.info(f"Playing ({duration:.2f}s)...")
-                    # No set_screen call here!
-                    self.elmo.set_volume(60)
-                    self.elmo.play_sound(filename_wav)
-                    
-                    # Wait for playback + buffer
-                    await asyncio.sleep(duration + 0.5)
-                else:
-                    logging.error("Failed to convert audio on robot.")
+                # Calculate Duration
+                original_duration = self.calculate_audio_duration(local_path)
+                # No speedup needed for robotic voice usually, unless we want to match previous logic.
+                # Previous logic: duration = original_duration / 0.85
+                # We can keep it or remove it. Since we set rate in pyttsx3, let's trust the duration.
+                duration = original_duration 
+                
+                # 4. Play
+                logging.info(f"Playing ({duration:.2f}s)...")
+                # No set_screen call here!
+                self.elmo.set_volume(60)
+                self.elmo.play_sound(filename_wav)
+                
+                # Wait for playback + buffer
+                await asyncio.sleep(duration + 0.5)
             else:
                 logging.error("Failed to upload audio file.")
             
