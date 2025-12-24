@@ -1,5 +1,6 @@
 import asyncio
 import time
+import datetime
 import os
 import sys
 import logging
@@ -40,6 +41,9 @@ class LocalBookExpert:
         
         # Runtime file
         self.runtime_file = "runtime.txt"
+        
+        # Statistics
+        self.stt_count = 0
 
     def setup_voice(self):
         """Configures the TTS voice to sound somewhat robotic or male."""
@@ -97,10 +101,11 @@ class LocalBookExpert:
     def save_runtime(self):
         """Calculates and saves the total run time to a file."""
         elapsed = time.time() - self.start_time
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
-            with open(self.runtime_file, "w") as f:
-                f.write(f"Total Run Time: {elapsed:.2f} seconds\n")
-            logging.info(f"Saved runtime ({elapsed:.2f}s) to {self.runtime_file}")
+            with open(self.runtime_file, "a") as f:
+                f.write(f"[{timestamp}] Session Duration: {elapsed:.2f} seconds | STT Transcriptions: {self.stt_count}\n")
+            logging.info(f"Saved runtime ({elapsed:.2f}s) and STT count ({self.stt_count}) to {self.runtime_file}")
         except Exception as e:
             logging.error(f"Failed to save runtime: {e}")
 
@@ -116,6 +121,7 @@ class LocalBookExpert:
                 user_text = self.listen()
                 
                 if user_text:
+                    self.stt_count += 1
                     print(f"\nYou said: {user_text}\n")
                     
                     # Get LLM Response

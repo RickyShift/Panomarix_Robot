@@ -2,6 +2,7 @@ import asyncio
 import queue
 import threading
 import time
+import datetime
 import re
 import os
 import speech_recognition as sr
@@ -85,8 +86,10 @@ async def generate_audio_worker():
         sentence_queue.task_done()
 
 def clean_text_for_speech(text):
-    """Removes text within asterisks (actions) for speech generation."""
-    return re.sub(r'\*.*?\*', '', text).strip()
+    """Removes text within asterisks (actions) and square brackets (emotions) for speech."""
+    text = re.sub(r'\*.*?\*', '', text) # Remove *actions*
+    text = re.sub(r'\[.*?\]', '', text) # Remove [EMOTIONS]
+    return text.strip()
 
 async def process_response(llm, user_text):
     """Streams response from LLM and queues sentences for audio generation."""
@@ -127,6 +130,8 @@ def main(persona="asterix"):
     :param persona: "asterix" or "expert"
     """
     start_time = time.time()
+    
+    stt_count = 0
     
     if persona == "expert":
         prompt_model = Book_Expert_prompt_model
@@ -174,6 +179,7 @@ def main(persona="asterix"):
                     
                     # Use corrected text
                     print(f"You said: {corrected_text}")
+                    stt_count += 1
 
                 except sr.UnknownValueError:
                     print("Could not understand audio.")
@@ -198,10 +204,11 @@ def main(persona="asterix"):
         end_time = time.time()
         elapsed_time = end_time - start_time
         runtime_file = "fluid_runtime.txt"
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
-            with open(runtime_file, "w") as f:
-                f.write(f"Total Run Time: {elapsed_time:.2f} seconds\n")
-            print(f"Saved runtime ({elapsed_time:.2f}s) to {runtime_file}")
+            with open(runtime_file, "a") as f:
+                f.write(f"[{timestamp}] Session Duration: {elapsed_time:.2f} seconds | STT Transcriptions: {stt_count}\n")
+            print(f"Saved runtime ({elapsed_time:.2f}s) and STT count ({stt_count}) to {runtime_file}")
             
             # Clean exit
             audio_queue.put(None)
