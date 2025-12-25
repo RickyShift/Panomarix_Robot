@@ -67,8 +67,12 @@ class LocalBookExpert:
 
     def speak(self, text):
         """Speaks the text using pyttsx3."""
+        if not text or not text.strip():
+            return
+
         logging.info(f"Speaking: {text}")
         try:
+            self.engine.stop() # Ensure engine is ready
             self.engine.say(text)
             self.engine.runAndWait()
         except Exception as e:
@@ -130,12 +134,13 @@ class LocalBookExpert:
                     
                     # Clean response
                     if response:
-                        response = response.replace("\n", " ").strip()
                         import re
-                        response = re.sub(r'\[.*?\]', '', response) # Remove staging instructions
+                        response = response.replace("\n", " ").strip()
+                        response = re.sub(r'\[.*?\]', '', response).strip() # Remove staging instructions and strip again
                         
-                        print(f"Bot: {response}")
-                        self.speak(response)
+                        if response:
+                            print(f"Bot: {response}")
+                            self.speak(response)
                 else:
                     print(">> Didn't catch that. Try again.")
 
