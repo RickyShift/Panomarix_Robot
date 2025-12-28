@@ -30,10 +30,6 @@ class LocalBookExpert:
         logging.info(f"Initializing LLM with persona: {self.prompt_model.name}")
         self.llm = characterLLM(prompt_model=self.prompt_model)
         
-        # Initialize Audio Engine
-        self.engine = pyttsx3.init()
-        self.setup_voice()
-        
         # Initialize Reconizer
         self.recognizer = sr.Recognizer()
         self.recognizer.pause_threshold = 0.8
@@ -45,10 +41,10 @@ class LocalBookExpert:
         # Statistics
         self.stt_count = 0
 
-    def setup_voice(self):
+    def setup_voice(self, engine):
         """Configures the TTS voice to sound somewhat robotic or male."""
         try:
-            voices = self.engine.getProperty('voices')
+            voices = engine.getProperty('voices')
             desired_voice = None
             for v in voices:
                 if "david" in v.name.lower():
@@ -58,10 +54,10 @@ class LocalBookExpert:
                 desired_voice = voices[0].id
             
             if desired_voice:
-                self.engine.setProperty('voice', desired_voice)
+                engine.setProperty('voice', desired_voice)
             
-            self.engine.setProperty('rate', 130) # Slightly slower
-            self.engine.setProperty('volume', 1.0)
+            engine.setProperty('rate', 130) # Slightly slower
+            engine.setProperty('volume', 1.0)
         except Exception as e:
             logging.error(f"Error setting up voice: {e}")
 
@@ -72,9 +68,12 @@ class LocalBookExpert:
 
         logging.info(f"Speaking: {text}")
         try:
-            self.engine.stop() # Ensure engine is ready
-            self.engine.say(text)
-            self.engine.runAndWait()
+            # Re-initialize engine for each speak call to prevent loop issues
+            engine = pyttsx3.init()
+            self.setup_voice(engine)
+            engine.say(text)
+            engine.runAndWait()
+            engine.stop()
         except Exception as e:
             logging.error(f"Error in TTS: {e}")
 

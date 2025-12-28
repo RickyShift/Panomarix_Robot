@@ -1,2 +1,4 @@
 [2025-12-24 22:01:06] Session Duration: 13.65 seconds | STT Transcriptions: 1
 [2025-12-24 22:05:50] Session Duration: 158.20 seconds | STT Transcriptions: 5
+[2025-12-28 16:23:14] Session Duration: 488.20 seconds | STT Transcriptions: 14
+[2025-12-28 16:52:00] Session Duration: 360.85 seconds | STT Transcriptions: 13
