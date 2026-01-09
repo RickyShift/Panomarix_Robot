@@ -1,17 +1,19 @@
 import socket
 import netifaces
 import threading
-
+import time
 
 CONTEXT = {
     "scanning_robots": False,
-    "robot_model": ""
+    "robot_model": "",
+    "found_ip": None
 }
-
 
 def callback(robot_name, robot_address):
         """Callback function called when a robot is found"""
         print(f"Found robot: {robot_name} at {robot_address}")
+        CONTEXT["found_ip"] = robot_address.split("//")[1].split(":")[0]
+        CONTEXT["scanning_robots"] = False
 
 def scan_robots(cb, models=[]):
     def scan_robots_runnable():
@@ -57,6 +59,29 @@ def scan_robots(cb, models=[]):
     CONTEXT["scanning_robots"] = True
     t = threading.Thread(target=scan_robots_runnable)
     t.start()
+    return t
 
+def get_robot_ip(timeout=10):
+    """
+    Scans for a robot and returns its IP.
+    Returns the IP string if found, else None.
+    """
+    print(f"Scanning for Elmo robot (timeout={timeout}s)...")
+    CONTEXT["found_ip"] = None
+    thread = scan_robots(callback)
+    
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if CONTEXT["found_ip"]:
+            return CONTEXT["found_ip"]
+        time.sleep(0.5)
+    
+    CONTEXT["scanning_robots"] = False # Stop scanning
+    return None
 
-scan_robots(callback)
+if __name__ == "__main__":
+    ip = get_robot_ip()
+    if ip:
+        print(f"Successfully found robot at: {ip}")
+    else:
+        print("No robot found.")
